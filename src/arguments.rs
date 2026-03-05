@@ -266,6 +266,13 @@ pub struct ConnectionSettings {
         help = "Http header to use, can be specified multiple times"
     )]
     pub headers: Vec<String>,
+    #[clap(
+        short = 'r',
+        long = "force-refresh",
+        default_value_t = false,
+        help = "Bypass release cache and fetch fresh data from the API"
+    )]
+    pub force_refresh: bool,
 }
 
 #[cfg_attr(test, derive(Debug, PartialEq))]

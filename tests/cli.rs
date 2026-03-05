@@ -88,6 +88,7 @@ Options:
   -w, --website-type <WEBSITE_TYPE>  If omitted, it will be guessed from repository url [possible values: github, gitea, gitlab]
   -i, --ip-type <IP_TYPE>            IP address type to use [default: any] [possible values: any, ipv4, ipv6]
       --header <HEADERS>             Http header to use, can be specified multiple times
+  -r, --force-refresh                Bypass release cache and fetch fresh data from the API
   -t, --tag <TAG>                    Tag of the release (latest if omitted)
   -p, --prerelease                   Include prereleases
   -f, --print-filename               Print downloaded filename to stdout
@@ -141,6 +142,7 @@ Options:
   -w, --website-type <WEBSITE_TYPE>  If omitted, it will be guessed from repository url [possible values: github, gitea, gitlab]
   -i, --ip-type <IP_TYPE>            IP address type to use [default: any] [possible values: any, ipv4, ipv6]
       --header <HEADERS>             Http header to use, can be specified multiple times
+  -r, --force-refresh                Bypass release cache and fetch fresh data from the API
   -p, --prerelease                   Include prereleases
   -c, --count <COUNT>                The last n releases to show [default: 1]
   -h, --help                         Print help
@@ -168,6 +170,7 @@ Options:
   -w, --website-type <WEBSITE_TYPE>  If omitted, it will be guessed from repository url [possible values: github, gitea, gitlab]
   -i, --ip-type <IP_TYPE>            IP address type to use [default: any] [possible values: any, ipv4, ipv6]
       --header <HEADERS>             Http header to use, can be specified multiple times
+  -r, --force-refresh                Bypass release cache and fetch fresh data from the API
   -t, --tag <TAG>                    Tag of the release
                                      If omitted latest (non prerelease) tag will be used
   -a, --asset-pattern <PATTERN>      Asset regex pattern to match against

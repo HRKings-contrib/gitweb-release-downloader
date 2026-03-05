@@ -1,10 +1,12 @@
 mod arguments;
 mod models;
 use std::{
-    fs::File,
+    fs::{self, File},
     io::{stderr, Write},
     net::ToSocketAddrs,
+    path::PathBuf,
     process::{self, exit},
+    time::SystemTime,
 };
 
 use arguments::{GitWebsite, IpType};
@@ -12,6 +14,7 @@ use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use models::*;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use ureq::{Agent, Resolver, Response};
 
 impl Resolver for IpType {
@@ -33,6 +36,60 @@ fn get_default_agent(ip_type: IpType) -> Agent {
 
 // GitHub requires the usage of a user agent
 const USERAGENT: &str = "gitweb-release-downloader";
+
+const CACHE_TTL_SECS: u64 = 3600;
+
+#[derive(Serialize, Deserialize)]
+struct CachedReleases {
+    cached_at: u64,
+    releases: Vec<Release>,
+}
+
+fn get_cache_dir() -> PathBuf {
+    std::env::var("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "~".to_string());
+            PathBuf::from(home).join(".cache")
+        })
+        .join("grd")
+}
+
+fn get_cache_path(repository: &arguments::Repository) -> PathBuf {
+    get_cache_dir()
+        .join(&repository.origin)
+        .join(&repository.owner)
+        .join(format!("{}.json", &repository.name))
+}
+
+fn read_cache(path: &PathBuf) -> Option<Vec<Release>> {
+    let data = fs::read_to_string(path).ok()?;
+    let cached: CachedReleases = serde_json::from_str(&data).ok()?;
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .ok()?
+        .as_secs();
+    if now.saturating_sub(cached.cached_at) < CACHE_TTL_SECS {
+        Some(cached.releases)
+    } else {
+        None
+    }
+}
+
+fn write_cache(path: &PathBuf, releases: &[Release]) {
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let cached = CachedReleases {
+        cached_at: now,
+        releases: releases.to_vec(),
+    };
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let _ = fs::write(path, serde_json::to_string(&cached).unwrap_or_default());
+}
 
 fn find_release<'a>(
     releases: &'a [Release],
@@ -127,7 +184,16 @@ fn get_releases(
     agent: &Agent,
     repository: &arguments::Repository,
     headers: &[String],
+    force_refresh: bool,
 ) -> Vec<Release> {
+    let cache_path = get_cache_path(repository);
+
+    if !force_refresh {
+        if let Some(cached) = read_cache(&cache_path) {
+            return cached;
+        }
+    }
+
     let base_url = get_releases_api_url(repository);
     let mut all_releases: Vec<Release> = Vec::new();
     let mut page: u32 = 1;
@@ -184,6 +250,8 @@ fn get_releases(
         all_releases.extend(page_releases);
         page += 1;
     }
+
+    write_cache(&cache_path, &all_releases);
 
     all_releases
 }
@@ -320,6 +388,7 @@ fn print_releases(releases_query_args: arguments::ReleasesQueryArgs) {
         &agent,
         &repository,
         &releases_query_args.connection_settings.headers,
+        releases_query_args.connection_settings.force_refresh,
     );
     let releases_iter = releases
         .iter()
@@ -337,6 +406,7 @@ fn print_assets(assets_query_args: arguments::AssetsQueryArgs) {
         &agent,
         &assets_query_args.repository,
         &assets_query_args.connection_settings.headers,
+        assets_query_args.connection_settings.force_refresh,
     );
     // if no tag is specified, prereleases are not allowed
     // however if a tag is specified, the user explictly chose
@@ -374,6 +444,7 @@ fn download_assets(mut download_args: arguments::DownloadArgs) {
         &agent,
         repository,
         &download_args.connection_settings.headers,
+        download_args.connection_settings.force_refresh,
     );
     let asset = get_asset_or_exit(&releases, &download_args, &compiled_asset_pattern);
 
